@@ -41,7 +41,7 @@ def send_to_led(name, distance, angle):
         requests.post(
             url, 
             json=payload, 
-            timeout=2
+            timeout=0
         )
     except:
         pass
