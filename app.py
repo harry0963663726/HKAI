@@ -14,14 +14,16 @@ st.set_page_config(
     layout="centered"
 )
 
-PAGE_SIZE = 5      
-BTN_HEIGHT = 50    
-FOOTER_HEIGHT = 140 
+# 定義全局常量，方便統一修改尺寸
+PAGE_SIZE = 3      # 每頁顯示的地點數量
+BTN_HEIGHT = 50    # 地點按鈕的高度
+FOOTER_HEIGHT = 140 # 底部資訊卡的高度
 
 # ==========================================
 # 1. 核心邏輯功能
 # ==========================================
 
+# 傳送導航數據至外部 LED 顯示器的 API
 def send_to_led(name, distance, angle):
     url = "http://10.12.4.100:8080/api/control"
     payload = {
@@ -32,10 +34,11 @@ def send_to_led(name, distance, angle):
         }
     }
     try:
-        requests.post(url, json=payload, timeout=2)
+        requests.post(url, json=payload, timeout=0)
     except:
         pass
 
+# 計算兩點間的方位角 (0-360度)
 def calculate_bearing(start_pos, end_pos):
     phi1 = math.radians(start_pos[0])
     phi2 = math.radians(end_pos[0])
@@ -46,22 +49,21 @@ def calculate_bearing(start_pos, end_pos):
     )
     return (math.degrees(math.atan2(x, y)) + 360) % 360
 
+# 將方位角轉換為直觀的箭頭與中英文方向
 def get_direction_text(bearing):
     dirs = [
-        ("↑", "北", "N"), ("↗", "東北", "NE"), 
-        ("→", "東", "E"), ("↘", "東南", "SE"),
-        ("↓", "南", "S"), ("↙", "西南", "SW"), 
-        ("←", "西", "W"), ("↖", "西北", "NW")
+        ("↑", "北", "N"), ("↗", "東北", "NE"), ("→", "東", "E"), ("↘", "東南", "SE"),
+        ("↓", "南", "S"), ("↙", "西南", "SW"), ("←", "西", "W"), ("↖", "西北", "NW")
     ]
     return dirs[int((bearing + 22.5) / 45) % 8]
 
 # ==========================================
-# 2. 設定檔載入
+# 2. 設定檔載入 (解析 config.ini)
 # ==========================================
 
 def load_config():
     all_locations = []
-    curr_pos = (25.035, 121.567) 
+    curr_pos = (25.035, 121.567) # 預設位置
     curr_name = "當前位置"
     categories = ["全部"]
     config = configparser.ConfigParser()
@@ -92,34 +94,35 @@ def load_config():
 
 current_pos, current_name, all_locs, categories = load_config()
 
+# 初始化 Session 狀態，紀錄頁碼與選中的地點
 if "page" not in st.session_state: st.session_state.page = 0
 if "selected_loc" not in st.session_state: st.session_state.selected_loc = None
 
 # ==========================================
-# 3. 視覺樣式與 CSS 注入區
+# 3. 視覺樣式與 CSS 客製化區塊
 # ==========================================
 
 st.markdown(f"""
 <style>
-    /* [功能：介面精簡化] 隱藏所有 Streamlit 原生控制元件 */
+    /* 隱藏 Streamlit 預設的所有導航欄、頁首、頁尾與選單 */
     [data-testid="stHeader"], [data-testid="stToolbar"], footer, #MainMenu, 
     [data-testid="stDecoration"], [class*="viewerBadge"], [data-testid="stStatusWidget"] {{
         display: none !important;
     }}
 
-    /* [功能：背景設定] 純黑背景並禁止橫向溢出 */
+    /* 設定全網頁背景為純黑色，並禁止左右橫向滾動 */
     html, body, [data-testid="stAppViewContainer"] {{ 
         background-color: black !important;
         overflow-x: hidden !important;
     }}
     
-    /* [功能：行動裝置排版寬度控制] */
+    /* 限制手機顯示區域的寬度與上下邊距 */
     .block-container {{ 
         max-width: 500px !important; 
         padding: 40px 15px !important; 
     }}
 
-    /* [功能：白底區塊禁止選取] 包含標題、資訊卡、清單按鈕 */
+    /* 定義通用白色卡片樣式：白底黑字、圓角、禁止文字選取(防長按選單) */
     .white-card {{
         background-color: white !important;
         color: black !important;
@@ -128,21 +131,18 @@ st.markdown(f"""
         margin-bottom: 12px;
         text-align: center;
         border: 1px solid silver !important;
-        
-        /* 禁止複製選取 */
         user-select: none !important;
         -webkit-user-select: none !important;
         -webkit-touch-callout: none !important;
     }}
 
-    /* [功能：下拉目錄禁止輸入功能] 僅作為挑選器使用 */
+    /* 修正下拉目錄：隱藏輸入文字功能，只允許點擊挑選 */
     [data-testid="stSelectbox"] input {{
-        caret-color: transparent !important;
-        color: transparent !important;
-        pointer-events: none !important;
+        caret-color: transparent !important; /* 隱藏游標 */
+        color: transparent !important;       /* 隱藏輸入文字 */
+        pointer-events: none !important;     /* 禁止直接點擊 input */
     }}
     
-    /* [功能：目錄按鈕視覺設定] */
     [data-testid="stSelectbox"] div[role="button"] {{
         background-color: white !important;
         color: black !important;
@@ -154,7 +154,14 @@ st.markdown(f"""
         user-select: none !important;
     }}
     
-    /* [功能：地點按鈕清單連續外觀] */
+    /* 設定下拉清單內的選項文字為粗體黑字 */
+    [data-testid="stSelectbox"] div[data-baseweb="select"] > div {{
+        color: black !important;
+        font-weight: bold !important;
+        font-size: 18px !important;
+    }}
+
+    /* 地點列表按鈕樣式：組成一個連續的列表感 */
     [data-slot="nav-btn"] button {{
         height: {BTN_HEIGHT}px !important; 
         background-color: white !important;
@@ -170,17 +177,19 @@ st.markdown(f"""
         user-select: none !important;
     }}
     
+    /* 列表最上方按鈕補回上方圓角 */
     [data-slot="nav-btn"]:first-of-type button {{ 
         border-radius: 10px 10px 0 0 !important; 
         border-top: 1px solid silver !important;
     }}
     
+    /* 列表最下方按鈕補回下方圓角 */
     [data-slot="nav-btn"]:last-of-type button {{ 
         border-radius: 0 0 10px 10px !important; 
         border-bottom: 1px solid silver !important;
     }}
 
-    /* [功能：分頁條強制併排] 手機不換行修正 */
+    /* 分頁控制器：強制水平併排不換行 */
     [data-testid="stHorizontalBlock"] {{ 
         display: flex !important;
         flex-direction: row !important;
@@ -192,32 +201,35 @@ st.markdown(f"""
         align-items: center !important;
     }}
     
-    /* [功能：分頁按鈕符號加粗] < 與 > 加粗為 900 */
+    [data-testid="stHorizontalBlock"] > div {{ 
+        flex: 1 1 auto !important;
+        min-width: 0 !important;
+    }}
+
+    /* 修改 < 與 > 符號按鈕的粗細與尺寸 */
     [data-testid="stHorizontalBlock"] [data-testid="stButton"] button {{
         background-color: white !important;
         color: black !important;
         border: 1px solid silver !important;
         border-radius: 10px !important;
-        font-weight: 900 !important;
-        font-size: 28px !important;
+        font-weight: 50 !important; /* 這裡改粗細：900 是最粗 */
+        font-size: 30px !important; /* 調大符號尺寸 */
         height: 50px !important;
+        width: 100% !important;
     }}
 
-    /* [功能：頁碼文字樣式與禁止選取] 修正 user-select 防止複製頁碼 */
+    /* 頁碼中間文字樣式 */
     .page-text {{ 
         color: white !important; 
         font-weight: bold; 
         font-size: 20px; 
         text-align: center;
         line-height: 50px;
-        
-        /* 禁止複製選取 */
-        user-select: none !important;
-        -webkit-user-select: none !important;
-        -webkit-touch-callout: none !important;
+        white-space: nowrap;
+        user-select: none;
     }}
 
-    /* [功能：按鈕點擊狀態保護] 防止變黑或顯現陰影 */
+    /* 防止所有按鈕在點擊或聚焦時變黑或出現陰影 */
     [data-testid="stButton"] button:active,
     [data-testid="stButton"] button:focus,
     [data-testid="stButton"] button:hover {{ 
@@ -227,31 +239,16 @@ st.markdown(f"""
         outline: none !important;
     }}
 
+    /* 標題與頁首文字細節 */
     .nav-header h1 {{ color: black; margin: 0; font-size: 32px; font-weight: 900; }}
     .nav-footer {{ height: {FOOTER_HEIGHT}px; display: flex; flex-direction: column; justify-content: center; }}
 </style>
 
 <script>
-/* [功能：自定義 Javascript 行為修正] */
+/* JS 腳本：處理手機瀏覽器的一些交互細節 */
 (function() {{
     const appFixer = () => {{
-        // 1. 目錄切換邏輯：點擊已開啟選單時強制關閉
-        const sb = document.querySelector('[data-testid="stSelectbox"] div[role="button"]');
-        if (sb && !sb.dataset.bound) {{
-            const toggleHandler = (e) => {{
-                if (sb.getAttribute('aria-expanded') === 'true') {{
-                    setTimeout(() => {{
-                        window.dispatchEvent(new KeyboardEvent('keydown', {{ 'key': 'Escape' }}));
-                        sb.blur();
-                    }}, 10);
-                }}
-            }};
-            sb.addEventListener('touchstart', toggleHandler, {{passive: true}});
-            sb.addEventListener('mousedown', toggleHandler);
-            sb.dataset.bound = 'true';
-        }}
-
-        // 2. 按鈕自動失焦修正
+        // 強制按鈕點擊後失焦，防止點擊後按鈕顏色卡住
         document.querySelectorAll('button').forEach(btn => {{
             if (!btn.dataset.blurfix) {{
                 const clear = () => {{ setTimeout(() => {{ btn.blur(); }}, 100); }};
@@ -260,8 +257,7 @@ st.markdown(f"""
                 btn.dataset.blurfix = 'true';
             }}
         }});
-
-        // 3. 列表按鈕類別標記
+        // 為地點按鈕標記屬性，以便 CSS 抓取圓角處理
         document.querySelectorAll('[data-testid="stButton"]').forEach(w => {{
             if (!w.closest('[data-testid="stHorizontalBlock"]')) 
                 w.setAttribute('data-slot', 'nav-btn');
@@ -273,21 +269,21 @@ st.markdown(f"""
 """, unsafe_allow_html=True)
 
 # ==========================================
-# 4. UI 介面渲染
+# 4. 畫面渲染與交互
 # ==========================================
 
-# 分類選擇
+# A. 目錄分類
 selected_cat = st.selectbox("分類", categories, label_visibility="collapsed")
 filtered_locations = all_locs if selected_cat == "全部" else [l for l in all_locs if l["category"] == selected_cat]
 
-# 起點標題區 (White Card)
+# B. 起點標題區 (White Card)
 st.markdown(
     f'<div class="white-card nav-header"><h1>{current_name}</h1>'
-    f'<p style="color:gray; margin:0; font-size:14px;">座標: {current_pos[0]:.4f}, {current_pos[1]:.4f}</p></div>', 
+    f'<p style="color:black; margin:0; font-size:14px;">座標: {current_pos[0]:.4f}, {current_pos[1]:.4f}</p></div>', 
     unsafe_allow_html=True
 )
 
-# 地點清單
+# C. 地點清單列表
 total_pages = max(1, math.ceil(len(filtered_locations) / PAGE_SIZE))
 if st.session_state.page >= total_pages: st.session_state.page = 0
 start_idx = st.session_state.page * PAGE_SIZE
@@ -303,23 +299,23 @@ for i in range(PAGE_SIZE):
             send_to_led(item["name"], d, b)
             st.rerun()
     else:
+        # 當列表不足 5 個時，顯示空按鈕維持高度一致
         st.button(" ", key=f"empty_{i}", disabled=True, use_container_width=True)
 
-# 分頁控制列 (手機強制併排且禁止選取頁碼)
+# D. 分頁控制列 (獨立按鈕 + 中間白字頁碼)
 col_prev, col_num, col_next = st.columns([1, 1.5, 1])
 with col_prev:
-    if st.button("<", key="nav_prev", use_container_width=True):
+    if st.button("上一頁", key="nav_prev", use_container_width=True):
         st.session_state.page = (st.session_state.page - 1) % total_pages
         st.rerun()
 with col_num:
-    # 這裡的 .page-text 已套用 user-select: none
     st.markdown(f'<div class="page-text">{st.session_state.page + 1} / {total_pages}</div>', unsafe_allow_html=True)
 with col_next:
-    if st.button(">", key="nav_next", use_container_width=True):
+    if st.button("下一頁", key="nav_next", use_container_width=True):
         st.session_state.page = (st.session_state.page + 1) % total_pages
         st.rerun()
 
-# 底部導航資訊顯示區
+# E. 底部導航資訊顯示區 (White Card)
 if st.session_state.selected_loc:
     t = st.session_state.selected_loc
     d_km = geodesic(current_pos, t["coords"]).kilometers
@@ -329,7 +325,7 @@ if st.session_state.selected_loc:
     st.markdown(f"""
         <div class="white-card nav-footer">
             <div style="font-size:26px; font-weight:bold; color:black;">{t['name']}</div>
-            <div style="font-size:28px; color:red; font-weight:bold; margin:6px 0;">
+            <div style="font-size:28px; color:red; font-weight:bold; margin:8px 0;">
                 {arr} {zh_dir} ({en_dir})
             </div>
             <div style="font-size:16px; color:black; font-weight:bold;">
@@ -339,7 +335,7 @@ if st.session_state.selected_loc:
     """, unsafe_allow_html=True)
 else:
     st.markdown(
-        '<div class="white-card nav-footer"><div style="color:gray; font-weight:bold; font-size:20px;">'
+        '<div class="white-card nav-footer"><div style="color:black; font-weight:bold; font-size:20px;">'
         '請選擇目的地</div></div>', 
         unsafe_allow_html=True
     )
