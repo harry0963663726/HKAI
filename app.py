@@ -16,7 +16,6 @@ st.set_page_config(
 
 PAGE_SIZE = 5
 BTN_HEIGHT = 50
-BTN_GAP = 1
 FOOTER_HEIGHT = 140
 
 # ==========================================
@@ -97,12 +96,12 @@ if "page" not in st.session_state: st.session_state.page = 0
 if "selected_loc" not in st.session_state: st.session_state.selected_loc = None
 
 # ==========================================
-# 3. 視覺樣式與互動腳本 (黑色背景 + 禁用選取)
+# 3. 視覺樣式 (黑底 + 獨立分頁方塊)
 # ==========================================
 
 st.markdown(f"""
 <style>
-    /* 1. 基礎環境：改為純黑色 */
+    /* 1. 基礎環境：純黑背景 */
     [data-testid="stHeader"], [data-testid="stToolbar"], footer, #MainMenu, 
     [data-testid="stDecoration"], [class*="viewerBadge"], [data-testid="stStatusWidget"] {{
         display: none !important;
@@ -118,7 +117,7 @@ st.markdown(f"""
         padding: 40px 15px !important; 
     }}
 
-    /* 2. 核心區塊：白底黑字 + 禁用長按選取功能 */
+    /* 2. 通用白底卡片 (禁用選取) */
     .white-card {{
         background-color: white !important;
         color: black !important;
@@ -127,22 +126,12 @@ st.markdown(f"""
         margin-bottom: 12px;
         text-align: center;
         border: 1px solid silver !important;
-        
-        /* 禁用選取功能 */
         user-select: none !important;
         -webkit-user-select: none !important;
-        -moz-user-select: none !important;
-        -ms-user-select: none !important;
-        -webkit-touch-callout: none !important; /* 禁用手機端長按彈出選單 */
+        -webkit-touch-callout: none !important;
     }}
 
-    /* 3. 目錄 (Selectbox) 修正 */
-    [data-testid="stSelectbox"] input {{
-        opacity: 0 !important;
-        position: absolute !important;
-        pointer-events: none !important;
-    }}
-    
+    /* 3. 目錄修正 */
     [data-testid="stSelectbox"] div[role="button"] {{
         background-color: white !important;
         color: black !important;
@@ -151,16 +140,9 @@ st.markdown(f"""
         border: 1px solid silver !important;
         margin-bottom: 12px !important;
         user-select: none !important;
-        -webkit-touch-callout: none !important;
-    }}
-    
-    [data-testid="stSelectbox"] div[data-baseweb="select"] > div {{
-        color: black !important;
-        font-weight: bold !important;
-        font-size: 18px !important;
     }}
 
-    /* 4. 地點列表按鈕 (白底黑字 + 禁用選取) */
+    /* 4. 地點按鈕清單 */
     [data-slot="nav-btn"] button {{
         height: {BTN_HEIGHT}px !important; 
         background-color: white !important;
@@ -174,7 +156,6 @@ st.markdown(f"""
         font-weight: bold !important;
         transition: none !important;
         user-select: none !important;
-        -webkit-touch-callout: none !important;
     }}
     
     [data-slot="nav-btn"]:first-of-type button {{ 
@@ -187,49 +168,43 @@ st.markdown(f"""
         border-bottom: 1px solid silver !important;
     }}
 
-    /* 5. 分頁列 (白底黑字 + 禁用選取) */
+    /* 5. 分頁控制器：獨立方塊排版 */
     [data-testid="stHorizontalBlock"] {{ 
-        display: flex !important; 
-        flex-direction: row !important; 
-        width: 100% !important;
-        background-color: white !important;
-        border-radius: 10px !important;
-        border: 1px solid silver !important;
-        margin: 15px 0 !important;
-        padding: 5px !important;
-        align-items: center !important;
-        user-select: none !important;
-        -webkit-touch-callout: none !important;
-    }}
-    
-    [data-testid="stHorizontalBlock"] > div {{ 
-        width: 33% !important; 
-        flex: 1 1 33% !important;
-    }}
-    
-    [data-testid="stHorizontalBlock"] [data-testid="stButton"] button {{
+        background-color: transparent !important; /* 移除整條白色背景 */
         border: none !important;
-        background-color: transparent !important;
-        border-radius: 8px !important;
+        margin: 20px 0 !important;
+        padding: 0 !important;
+        align-items: center !important;
+    }}
+    
+    /* 上一頁與下一頁的獨立白色方框 */
+    [data-testid="stHorizontalBlock"] [data-testid="stButton"] button {{
+        background-color: white !important;
+        color: black !important;
+        border: 1px solid silver !important;
+        border-radius: 10px !important;
+        font-weight: bold !important;
+        height: 45px !important;
     }}
 
+    /* 頁碼文字：維持黑色背景中的白色文字 */
     .page-text {{ 
-        color: black !important; 
+        color: white !important; 
         font-weight: bold; 
         font-size: 18px; 
         text-align: center;
+        line-height: 45px;
+        user-select: none !important;
     }}
 
     /* 6. 按鈕點擊防反黑 */
     [data-testid="stButton"] button:active,
-    [data-testid="stButton"] button:focus,
-    [data-testid="stButton"] button:hover {{ 
+    [data-testid="stButton"] button:focus {{ 
         background-color: white !important; 
         color: black !important; 
         box-shadow: none !important;
     }}
 
-    /* 7. 抬頭與腳部樣式細節 */
     .nav-header h1 {{ color: black; margin: 0; font-size: 32px; font-weight: 900; }}
     .nav-footer {{ height: {FOOTER_HEIGHT}px; display: flex; flex-direction: column; justify-content: center; }}
 </style>
@@ -237,21 +212,7 @@ st.markdown(f"""
 <script>
 (function() {{
     const appFixer = () => {{
-        const sb = document.querySelector('[data-testid="stSelectbox"] div[role="button"]');
-        if (sb && !sb.dataset.bound) {{
-            const toggle = (e) => {{
-                if (sb.getAttribute('aria-expanded') === 'true') {{
-                    setTimeout(() => {{
-                        window.dispatchEvent(new KeyboardEvent('keydown', {{ 'key': 'Escape' }}));
-                        sb.blur();
-                    }}, 10);
-                }}
-            }};
-            sb.addEventListener('touchstart', toggle, {{passive: true}});
-            sb.addEventListener('mousedown', toggle);
-            sb.dataset.bound = 'true';
-        }}
-
+        // 按鈕自動失焦
         document.querySelectorAll('button').forEach(btn => {{
             if (!btn.dataset.blurfix) {{
                 const clear = () => {{ setTimeout(() => {{ btn.blur(); }}, 100); }};
@@ -261,6 +222,7 @@ st.markdown(f"""
             }}
         }});
 
+        // 標記地點按鈕
         document.querySelectorAll('[data-testid="stButton"]').forEach(w => {{
             if (!w.closest('[data-testid="stHorizontalBlock"]')) 
                 w.setAttribute('data-slot', 'nav-btn');
@@ -288,9 +250,7 @@ st.markdown(
 
 # C. 地點列表渲染
 total_pages = max(1, math.ceil(len(filtered_locations) / PAGE_SIZE))
-if st.session_state.page >= total_pages: 
-    st.session_state.page = 0
-    
+if st.session_state.page >= total_pages: st.session_state.page = 0
 start_idx = st.session_state.page * PAGE_SIZE
 current_items = filtered_locations[start_idx : start_idx + PAGE_SIZE]
 
@@ -306,20 +266,21 @@ for i in range(PAGE_SIZE):
     else:
         st.button(" ", key=f"empty_{i}", disabled=True, use_container_width=True)
 
-# D. 分頁控制列 (白色區塊)
+# D. 分頁控制列 (獨立按鈕與無框頁碼)
 col_prev, col_num, col_next = st.columns([1, 1, 1])
 with col_prev:
     if st.button("上一頁", key="nav_prev", use_container_width=True):
         st.session_state.page = (st.session_state.page - 1) % total_pages
         st.rerun()
 with col_num:
+    # 頁碼不再使用白色框，直接顯示在黑色背景上
     st.markdown(f'<div class="page-text">{st.session_state.page + 1} / {total_pages}</div>', unsafe_allow_html=True)
 with col_next:
     if st.button("下一頁", key="nav_next", use_container_width=True):
         st.session_state.page = (st.session_state.page + 1) % total_pages
         st.rerun()
 
-# E. 底部資訊卡 (White Card + 禁止選取)
+# E. 底部資訊卡
 if st.session_state.selected_loc:
     t = st.session_state.selected_loc
     d_km = geodesic(current_pos, t["coords"]).kilometers
