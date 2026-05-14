@@ -96,12 +96,12 @@ if "page" not in st.session_state: st.session_state.page = 0
 if "selected_loc" not in st.session_state: st.session_state.selected_loc = None
 
 # ==========================================
-# 3. 視覺樣式 (黑底 + 獨立分頁方塊)
+# 3. 視覺樣式 (強制不換行)
 # ==========================================
 
 st.markdown(f"""
 <style>
-    /* 1. 基礎環境：純黑背景 */
+    /* 1. 基礎環境 */
     [data-testid="stHeader"], [data-testid="stToolbar"], footer, #MainMenu, 
     [data-testid="stDecoration"], [class*="viewerBadge"], [data-testid="stStatusWidget"] {{
         display: none !important;
@@ -139,7 +139,6 @@ st.markdown(f"""
         height: 48px !important;
         border: 1px solid silver !important;
         margin-bottom: 12px !important;
-        user-select: none !important;
     }}
 
     /* 4. 地點按鈕清單 */
@@ -168,33 +167,45 @@ st.markdown(f"""
         border-bottom: 1px solid silver !important;
     }}
 
-    /* 5. 分頁控制器：獨立方塊排版 */
+    /* 5. 關鍵修正：分頁列強制併排且不換行 */
     [data-testid="stHorizontalBlock"] {{ 
-        background-color: transparent !important; /* 移除整條白色背景 */
-        border: none !important;
+        display: flex !important;
+        flex-direction: row !important; /* 強制水平 */
+        flex-wrap: nowrap !important;    /* 強制不換行 */
+        width: 100% !important;
+        background-color: transparent !important;
         margin: 20px 0 !important;
         padding: 0 !important;
         align-items: center !important;
+        justify-content: space-between !important;
     }}
     
-    /* 上一頁與下一頁的獨立白色方框 */
+    /* 調整欄位寬度分配 */
+    [data-testid="stHorizontalBlock"] > div {{ 
+        flex: 1 1 auto !important;
+        min-width: 0 !important; /* 允許縮小防止溢出 */
+    }}
+
+    /* 分頁按鈕樣式 */
     [data-testid="stHorizontalBlock"] [data-testid="stButton"] button {{
         background-color: white !important;
         color: black !important;
         border: 1px solid silver !important;
         border-radius: 10px !important;
         font-weight: bold !important;
-        height: 45px !important;
+        font-size: 22px !important;
+        height: 50px !important;
+        width: 100% !important;
     }}
 
-    /* 頁碼文字：維持黑色背景中的白色文字 */
+    /* 頁碼文字 */
     .page-text {{ 
         color: white !important; 
         font-weight: bold; 
-        font-size: 18px; 
+        font-size: 20px; 
         text-align: center;
-        line-height: 45px;
-        user-select: none !important;
+        line-height: 50px;
+        white-space: nowrap; /* 確保 1 / 4 不會斷行 */
     }}
 
     /* 6. 按鈕點擊防反黑 */
@@ -212,7 +223,6 @@ st.markdown(f"""
 <script>
 (function() {{
     const appFixer = () => {{
-        // 按鈕自動失焦
         document.querySelectorAll('button').forEach(btn => {{
             if (!btn.dataset.blurfix) {{
                 const clear = () => {{ setTimeout(() => {{ btn.blur(); }}, 100); }};
@@ -221,8 +231,6 @@ st.markdown(f"""
                 btn.dataset.blurfix = 'true';
             }}
         }});
-
-        // 標記地點按鈕
         document.querySelectorAll('[data-testid="stButton"]').forEach(w => {{
             if (!w.closest('[data-testid="stHorizontalBlock"]')) 
                 w.setAttribute('data-slot', 'nav-btn');
@@ -237,18 +245,15 @@ st.markdown(f"""
 # 4. UI 介面渲染
 # ==========================================
 
-# A. 分類目錄
 selected_cat = st.selectbox("分類", categories, label_visibility="collapsed")
 filtered_locations = all_locs if selected_cat == "全部" else [l for l in all_locs if l["category"] == selected_cat]
 
-# B. 當前位置 (White Card)
 st.markdown(
     f'<div class="white-card nav-header"><h1>{current_name}</h1>'
     f'<p style="color:gray; margin:0; font-size:14px;">座標: {current_pos[0]:.4f}, {current_pos[1]:.4f}</p></div>', 
     unsafe_allow_html=True
 )
 
-# C. 地點列表渲染
 total_pages = max(1, math.ceil(len(filtered_locations) / PAGE_SIZE))
 if st.session_state.page >= total_pages: st.session_state.page = 0
 start_idx = st.session_state.page * PAGE_SIZE
@@ -266,21 +271,19 @@ for i in range(PAGE_SIZE):
     else:
         st.button(" ", key=f"empty_{i}", disabled=True, use_container_width=True)
 
-# D. 分頁控制列 (獨立按鈕與無框頁碼)
-col_prev, col_num, col_next = st.columns([1, 1, 1])
+# 關鍵排版區：使用更窄的欄位比例確保併排
+col_prev, col_num, col_next = st.columns([1, 1.5, 1])
 with col_prev:
-    if st.button("上一頁", key="nav_prev", use_container_width=True):
+    if st.button("<", key="nav_prev", use_container_width=True):
         st.session_state.page = (st.session_state.page - 1) % total_pages
         st.rerun()
 with col_num:
-    # 頁碼不再使用白色框，直接顯示在黑色背景上
     st.markdown(f'<div class="page-text">{st.session_state.page + 1} / {total_pages}</div>', unsafe_allow_html=True)
 with col_next:
-    if st.button("下一頁", key="nav_next", use_container_width=True):
+    if st.button(">", key="nav_next", use_container_width=True):
         st.session_state.page = (st.session_state.page + 1) % total_pages
         st.rerun()
 
-# E. 底部資訊卡
 if st.session_state.selected_loc:
     t = st.session_state.selected_loc
     d_km = geodesic(current_pos, t["coords"]).kilometers
