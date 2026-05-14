@@ -15,9 +15,9 @@ st.set_page_config(
 )
 
 # 定義全局常量，方便統一修改尺寸
-PAGE_SIZE = 3      # 每頁顯示的地點數量
+PAGE_SIZE = 6      # 每頁顯示的地點數量
 BTN_HEIGHT = 50    # 地點按鈕的高度
-FOOTER_HEIGHT = 140 # 底部資訊卡的高度
+FOOTER_HEIGHT = 150 # 底部資訊卡的高度
 
 # ==========================================
 # 1. 核心邏輯功能
@@ -305,13 +305,13 @@ for i in range(PAGE_SIZE):
 # D. 分頁控制列 (獨立按鈕 + 中間白字頁碼)
 col_prev, col_num, col_next = st.columns([1, 1.5, 1])
 with col_prev:
-    if st.button("上一頁", key="nav_prev", use_container_width=True):
+    if st.button("<", key="nav_prev", use_container_width=True):
         st.session_state.page = (st.session_state.page - 1) % total_pages
         st.rerun()
 with col_num:
     st.markdown(f'<div class="page-text">{st.session_state.page + 1} / {total_pages}</div>', unsafe_allow_html=True)
 with col_next:
-    if st.button("下一頁", key="nav_next", use_container_width=True):
+    if st.button(">", key="nav_next", use_container_width=True):
         st.session_state.page = (st.session_state.page + 1) % total_pages
         st.rerun()
 
@@ -326,7 +326,7 @@ if st.session_state.selected_loc:
         <div class="white-card nav-footer">
             <div style="font-size:26px; font-weight:bold; color:black;">{t['name']}</div>
             <div style="font-size:28px; color:red; font-weight:bold; margin:8px 0;">
-                {arr} {zh_dir} ({en_dir})
+                {arr} {zh_dir} {en_dir}
             </div>
             <div style="font-size:16px; color:black; font-weight:bold;">
                 距離: {d_km:.3f} km | 方位: {b_deg:.1f}°
