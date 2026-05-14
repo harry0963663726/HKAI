@@ -14,7 +14,7 @@ st.set_page_config(
     layout="centered"
 )
 
-# 定義 UI 尺寸常量
+# 定義全局 UI 參數
 PAGE_SIZE = 5      
 BTN_HEIGHT = 50    
 FOOTER_HEIGHT = 140 
@@ -23,7 +23,7 @@ FOOTER_HEIGHT = 140
 # 1. 核心邏輯功能
 # ==========================================
 
-# [功能：硬體通訊] 透過 API 將導航數據傳送至 LED 控制器
+# [功能：硬體 API] 傳送導航資訊至外部 LED 控制器
 def send_to_led(name, distance, angle):
     url = "http://10.12.4.100:8080/api/control"
     payload = {
@@ -38,7 +38,7 @@ def send_to_led(name, distance, angle):
     except:
         pass
 
-# [功能：地理計算] 計算兩點間的精確方位角
+# [功能：方位角計算] 計算起點到終點的地理方位
 def calculate_bearing(start_pos, end_pos):
     phi1 = math.radians(start_pos[0])
     phi2 = math.radians(end_pos[0])
@@ -49,7 +49,7 @@ def calculate_bearing(start_pos, end_pos):
     )
     return (math.degrees(math.atan2(x, y)) + 360) % 360
 
-# [功能：視覺轉換] 將方位角對應至箭頭符號與方位文字
+# [功能：方向文本轉換]
 def get_direction_text(bearing):
     dirs = [
         ("↑", "北", "N"), ("↗", "東北", "NE"), 
@@ -60,7 +60,7 @@ def get_direction_text(bearing):
     return dirs[int((bearing + 22.5) / 45) % 8]
 
 # ==========================================
-# 2. 設定檔載入 (從 config.ini 讀取地點與類別)
+# 2. 設定檔載入 (解析 config.ini)
 # ==========================================
 
 def load_config():
@@ -96,23 +96,23 @@ def load_config():
 
 current_pos, current_name, all_locs, categories = load_config()
 
-# 初始化 Session 狀態
+# 初始化狀態
 if "page" not in st.session_state: st.session_state.page = 0
 if "selected_loc" not in st.session_state: st.session_state.selected_loc = None
 
 # ==========================================
-# 3. 視覺樣式與 CSS/JS 注入
+# 3. 視覺樣式與強力 CSS 修正
 # ==========================================
 
 st.markdown(f"""
 <style>
-    /* [功能：去除 Streamlit 框架外觀] */
+    /* [功能：去除原生 UI] 隱藏所有 Streamlit 導航與選單 */
     [data-testid="stHeader"], [data-testid="stToolbar"], footer, #MainMenu, 
     [data-testid="stDecoration"], [class*="viewerBadge"], [data-testid="stStatusWidget"] {{
         display: none !important;
     }}
 
-    /* [功能：全域背景設定] 純黑背景，禁止溢出 */
+    /* [功能：全域背景與防滑動] */
     html, body, [data-testid="stAppViewContainer"] {{ 
         background-color: black !important;
         overflow-x: hidden !important;
@@ -120,10 +120,10 @@ st.markdown(f"""
     
     .block-container {{ 
         max-width: 500px !important; 
-        padding: 40px 15px !important; 
+        padding: 20px 15px !important; 
     }}
 
-    /* [功能：白底區塊禁止選取] 用於標題卡、底部資訊卡 */
+    /* [功能：白底卡片設計] 標題與底部資訊卡，禁止選取文字 */
     .white-card {{
         background-color: white !important;
         color: black !important;
@@ -137,7 +137,7 @@ st.markdown(f"""
         -webkit-touch-callout: none !important;
     }}
 
-    /* [功能：目錄下拉選單優化] 隱藏文字輸入游標，防止手機鍵盤彈出 */
+    /* [功能：目錄下拉選單優化] 禁止手機輸入與鍵盤彈出 */
     [data-testid="stSelectbox"] input {{
         caret-color: transparent !important;
         color: transparent !important;
@@ -154,7 +154,7 @@ st.markdown(f"""
         user-select: none !important;
     }}
 
-    /* [功能：地點列表按鈕] 堆疊樣式與圓角處理 */
+    /* [功能：地點按鈕清單視覺樣式] */
     [data-slot="nav-btn"] button {{
         height: {BTN_HEIGHT}px !important; 
         background-color: white !important;
@@ -172,59 +172,56 @@ st.markdown(f"""
     [data-slot="nav-btn"]:first-of-type button {{ border-radius: 10px 10px 0 0 !important; border-top: 1px solid silver !important; }}
     [data-slot="nav-btn"]:last-of-type button {{ border-radius: 0 0 10px 10px !important; border-bottom: 1px solid silver !important; }}
 
-    /* [核心修正：分頁條強制橫向併排] 確保 < 頁碼 > 比例為 1:1:1 */
-    [data-testid="stHorizontalBlock"] {{ 
+    /* [核心修正：強力水平排版] 強制手機端分頁列不換行 */
+    div[data-testid="stHorizontalBlock"] {{
         display: flex !important;
-        flex-direction: row !important;
-        flex-wrap: nowrap !important;
-        width: 100% !important;
-        background-color: transparent !important;
-        margin: 20px 0 !important;
-        padding: 0 !important;
+        flex-direction: row !important; /* 強制橫向 */
+        flex-wrap: nowrap !important;   /* 絕不換行 */
         align-items: center !important;
-        gap: 0 !important; /* 減少間距讓分配更精準 */
+        justify-content: space-between !important;
+        width: 100% !important;
+        gap: 5px !important;
+        margin: 15px 0 !important;
     }}
     
-    /* 強制 columns 內的 div 平分空間 */
-    [data-testid="stHorizontalBlock"] [data-testid="column"] {{
-        width: 33.33% !important;
-        flex: 1 1 0% !important;
+    /* 強制 columns 欄位在手機端不變成 100% 寬度 */
+    div[data-testid="stHorizontalBlock"] > div[data-testid="column"] {{
+        flex: 1 1 33% !important; /* 強制各佔 1/3 */
         min-width: 0 !important;
+        max-width: 33.33% !important;
     }}
 
-    /* [功能：分頁符號強化] 設定 < 與 > 的粗細與尺寸 */
-    [data-testid="stHorizontalBlock"] [data-testid="stButton"] button {{
+    /* [功能：分頁按鈕細節] 加粗 900 符號 */
+    [data-testid="stHorizontalBlock"] button {{
         background-color: white !important;
         color: black !important;
         border: 1px solid silver !important;
         border-radius: 10px !important;
         font-weight: 900 !important;
-        font-size: 28px !important;
+        font-size: 24px !important;
         height: 50px !important;
-        padding: 0 !important;
+        width: 100% !important;
     }}
 
-    /* [功能：頁碼文字美化與禁止選取] */
+    /* [功能：頁碼樣式與禁止選取] */
     .page-text {{ 
         color: white !important; 
         font-weight: bold; 
-        font-size: 18px; 
+        font-size: 16px; 
         text-align: center;
         line-height: 50px;
+        white-space: nowrap !important;
         user-select: none !important;
         -webkit-user-select: none !important;
         -webkit-touch-callout: none !important;
-        white-space: nowrap !important;
     }}
 
-    /* [功能：按鈕點擊狀態保護] 防止點擊後變色或出現陰影 */
+    /* [功能：按鈕視覺保護] */
     [data-testid="stButton"] button:active,
-    [data-testid="stButton"] button:focus,
-    [data-testid="stButton"] button:hover {{ 
+    [data-testid="stButton"] button:focus {{ 
         background-color: white !important; 
         color: black !important; 
         box-shadow: none !important;
-        outline: none !important;
     }}
 
     .nav-header h1 {{ color: black; margin: 0; font-size: 32px; font-weight: 900; }}
@@ -232,13 +229,13 @@ st.markdown(f"""
 </style>
 
 <script>
-/* [功能：自定義互動邏輯] */
+/* [功能：JS 交互細節] */
 (function() {{
     const appFixer = () => {{
-        // 1. 目錄切換邏輯：點擊已開啟選單時強制關閉 (Toggle 功能)
+        // 1. 下拉目錄切換行為 (Toggle)
         const sb = document.querySelector('[data-testid="stSelectbox"] div[role="button"]');
         if (sb && !sb.dataset.bound) {{
-            const toggleHandler = (e) => {{
+            const toggleHandler = () => {{
                 if (sb.getAttribute('aria-expanded') === 'true') {{
                     setTimeout(() => {{
                         window.dispatchEvent(new KeyboardEvent('keydown', {{ 'key': 'Escape' }}));
@@ -250,7 +247,7 @@ st.markdown(f"""
             sb.dataset.bound = 'true';
         }}
 
-        // 2. 按鈕自動失焦修正：防止點擊後殘留聚焦狀態
+        // 2. 按鈕自動失焦修正
         document.querySelectorAll('button').forEach(btn => {{
             if (!btn.dataset.blurfix) {{
                 const clear = () => {{ setTimeout(() => {{ btn.blur(); }}, 100); }};
@@ -260,7 +257,7 @@ st.markdown(f"""
             }}
         }});
 
-        // 3. 列表按鈕類別標記：用於 CSS 列表圓角判斷
+        // 3. 標記列表按鈕位置
         document.querySelectorAll('[data-testid="stButton"]').forEach(w => {{
             if (!w.closest('[data-testid="stHorizontalBlock"]')) 
                 w.setAttribute('data-slot', 'nav-btn');
@@ -272,21 +269,21 @@ st.markdown(f"""
 """, unsafe_allow_html=True)
 
 # ==========================================
-# 4. UI 渲染渲染區
+# 4. UI 渲染渲染
 # ==========================================
 
-# A. 分類選擇器
+# A. 分類選擇
 selected_cat = st.selectbox("分類", categories, label_visibility="collapsed")
 filtered_locations = all_locs if selected_cat == "全部" else [l for l in all_locs if l["category"] == selected_cat]
 
-# B. 當前位置標題卡
+# B. 頂部標題卡片
 st.markdown(
     f'<div class="white-card nav-header"><h1>{current_name}</h1>'
     f'<p style="color:gray; margin:0; font-size:14px;">座標: {current_pos[0]:.4f}, {current_pos[1]:.4f}</p></div>', 
     unsafe_allow_html=True
 )
 
-# C. 地點列表渲染
+# C. 地點按鈕清單
 total_pages = max(1, math.ceil(len(filtered_locations) / PAGE_SIZE))
 if st.session_state.page >= total_pages: st.session_state.page = 0
 start_idx = st.session_state.page * PAGE_SIZE
@@ -302,23 +299,22 @@ for i in range(PAGE_SIZE):
             send_to_led(item["name"], d, b)
             st.rerun()
     else:
-        # 佔位按鈕，維持高度穩定
         st.button(" ", key=f"empty_{i}", disabled=True, use_container_width=True)
 
-# D. 分頁控制列 (比例調整為 1:1:1，且禁止選取)
+# D. 分頁控制列 (比例 1:1:1，強制手機併排且禁止選取)
 col_prev, col_num, col_next = st.columns([1, 1, 1])
 with col_prev:
-    if st.button("<", key="nav_prev", use_container_width=True):
+    if st.button("<", key="nav_prev"):
         st.session_state.page = (st.session_state.page - 1) % total_pages
         st.rerun()
 with col_num:
     st.markdown(f'<div class="page-text">{st.session_state.page + 1} / {total_pages}</div>', unsafe_allow_html=True)
 with col_next:
-    if st.button(">", key="nav_next", use_container_width=True):
+    if st.button(">", key="nav_next"):
         st.session_state.page = (st.session_state.page + 1) % total_pages
         st.rerun()
 
-# E. 底部導航資訊顯示區
+# E. 底部導航資訊顯示
 if st.session_state.selected_loc:
     t = st.session_state.selected_loc
     d_km = geodesic(current_pos, t["coords"]).kilometers
