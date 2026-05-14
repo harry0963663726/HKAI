@@ -33,7 +33,7 @@ def send_to_led(name, distance, angle):
         }
     }
     try:
-        response = requests.post(url, json=payload, timeout=5)
+        response = requests.post(url, json=payload, timeout=0)
         if response.status_code == 200:
             print("發送成功！")
         else:
