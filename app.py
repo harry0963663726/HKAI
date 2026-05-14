@@ -56,7 +56,6 @@ if st.session_state.page >= total_pages:
 start_idx     = st.session_state.page * PAGE_SIZE
 current_items = filtered_locations[start_idx : start_idx + PAGE_SIZE]
 
-# ── CSS ──
 st.markdown(f"""
 <style>
 html, body,
@@ -67,9 +66,33 @@ html, body,
 .block-container {{
     max-width: 500px !important;
     padding: 10px !important;
+    /* 問題1：下移一個 selectbox 高度（約 50px）*/
+    padding-top: 60px !important;
 }}
-header, footer, [data-testid="stHeader"] {{ visibility: hidden; }}
+
+/* 問題4：完全隱藏 Streamlit 工具列、頁尾、右下角標誌 */
+header, footer,
+[data-testid="stHeader"],
+[data-testid="stToolbar"],
+[data-testid="stDecoration"],
+[data-testid="stStatusWidget"],
+#MainMenu,
+.viewerBadge_container__1QSob,
+.styles_viewerBadge__1yB5_,
+[class*="viewerBadge"],
+iframe[title="streamlit_components"] {{
+    visibility: hidden !important;
+    display: none !important;
+    height: 0 !important;
+    width: 0 !important;
+}}
+
 [data-testid="stVerticalBlock"] > div {{ gap: 0rem !important; }}
+
+/* 問題1：selectbox 往下推（用 margin-top）*/
+[data-testid="stSelectbox"] {{
+    margin-top: 0px !important;
+}}
 
 /* 頂部標題 */
 .nav-header {{
@@ -81,20 +104,7 @@ header, footer, [data-testid="stHeader"] {{ visibility: hidden; }}
 .nav-header h1 {{ font-size: 40px; color: black; margin: 0; font-weight: 900; }}
 .nav-header p  {{ font-size: 20px; color: gray; margin: 5px 0 0 0; font-family: monospace; }}
 
-/* 所有選項按鈕（透過 data-slot 識別，JS 注入） */
-[data-slot="nav-btn"] > button {{
-    height: {BTN_HEIGHT}px !important;
-    min-height: {BTN_HEIGHT}px !important;
-    max-height: {BTN_HEIGHT}px !important;
-    background: #1E2329 !important;
-    border: 1px solid #3E454D !important;
-    color: white !important;
-    font-size: 40px !important;
-    border-radius: 6px !important;
-    width: 100% !important;
-    margin: 0 !important;
-    box-sizing: border-box !important;
-}}
+/* 選項按鈕（JS 會標上 data-slot="nav-btn"） */
 [data-slot="nav-btn"] {{
     height: {BTN_HEIGHT}px !important;
     min-height: {BTN_HEIGHT}px !important;
@@ -103,8 +113,30 @@ header, footer, [data-testid="stHeader"] {{ visibility: hidden; }}
     margin-bottom: {BTN_GAP}px !important;
     padding: 0 !important;
 }}
-
-/* disabled（佔位）按鈕：透明但佔高度 */
+[data-slot="nav-btn"] > button {{
+    height: {BTN_HEIGHT}px !important;
+    min-height: {BTN_HEIGHT}px !important;
+    background: #1E2329 !important;
+    border: 1px solid #3E454D !important;
+    color: white !important;
+    font-size: 40px !important;
+    border-radius: 6px !important;
+    width: 100% !important;
+    margin: 0 !important;
+    box-sizing: border-box !important;
+    /* 問題2：取消 active/focus 變色，按下後立即恢復 */
+    transition: none !important;
+    -webkit-tap-highlight-color: transparent !important;
+}}
+[data-slot="nav-btn"] > button:active,
+[data-slot="nav-btn"] > button:focus,
+[data-slot="nav-btn"] > button:focus-visible {{
+    background: #1E2329 !important;
+    border: 1px solid #3E454D !important;
+    color: white !important;
+    outline: none !important;
+    box-shadow: none !important;
+}}
 [data-slot="nav-btn"] > button:disabled {{
     background: transparent !important;
     border: none !important;
@@ -112,18 +144,40 @@ header, footer, [data-testid="stHeader"] {{ visibility: hidden; }}
     pointer-events: none !important;
 }}
 
-/* 分頁 */
+/* 問題3：分頁列 — 三個元素同一行置中緊靠 */
+.pager-row {{
+    display: flex !important;
+    flex-direction: row !important;
+    justify-content: center !important;
+    align-items: center !important;
+    gap: 10px !important;
+    margin: 8px 0 !important;
+    width: 100% !important;
+}}
+.pager-row [data-testid="stButton"] > button,
+.pager-row .stButton > button {{
+    width: 50px !important;
+    height: 40px !important;
+    font-size: 18px !important;
+    font-weight: 900 !important;
+    background: #1E2329 !important;
+    border: 1px solid #3E454D !important;
+    color: white !important;
+    border-radius: 6px !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    transition: none !important;
+    -webkit-tap-highlight-color: transparent !important;
+}}
+.pager-row [data-testid="stButton"] > button:active,
+.pager-row [data-testid="stButton"] > button:focus {{
+    background: #1E2329 !important;
+    outline: none !important;
+    box-shadow: none !important;
+}}
 .page-text {{
-    color: white; font-weight: 900; font-size: 16px;
-    text-align: center; min-width: 60px;
-}}
-[data-testid="column"] {{
-    display: flex; justify-content: center; align-items: center;
-    width: fit-content !important; flex: unset !important; min-width: unset !important;
-}}
-[data-testid="column"] .stButton > button {{
-    width: 50px !important; height: 40px !important;
-    margin-bottom: 0 !important; font-size: 16px !important;
+    color: white; font-weight: 900; font-size: 18px;
+    white-space: nowrap; line-height: 40px;
 }}
 
 /* 底部資訊框 */
@@ -138,43 +192,40 @@ header, footer, [data-testid="stHeader"] {{ visibility: hidden; }}
 </style>
 
 <script>
-// JS 策略：
-// 1. 在每個選項按鈕渲染前，先用 st.markdown 插入一個帶 id 的 <script> marker
-// 2. JS 找到 marker，往上找到對應的 stButton wrapper，打上 data-slot="nav-btn"
-// 3. CSS 用 [data-slot="nav-btn"] 精確鎖定高度
 (function() {{
-    function tagSlots() {{
-        document.querySelectorAll('script[data-nav-marker]').forEach(marker => {{
-            // marker 的父鏈往上找到 [data-testid="stButton"]
-            let el = marker.parentElement;
-            for (let i = 0; i < 10 && el; i++) {{
-                if (el.dataset && el.dataset.testid === 'stButton') {{
-                    el.setAttribute('data-slot', 'nav-btn');
-                    break;
-                }}
-                // 也找相鄰的下一個 stButton sibling
-                el = el.parentElement;
-            }}
-        }});
-
-        // 備用：直接找 key 含 btn_ 或 empty_ 的按鈕
+    // 選項按鈕標記（排除分頁按鈕）
+    function tagNavBtns() {{
         document.querySelectorAll('[data-testid="stButton"]').forEach(wrapper => {{
-            const btn = wrapper.querySelector('button');
-            if (!btn) return;
-            const key = wrapper.closest('[data-stale]')?.getAttribute('key') || '';
-            // 透過按鈕在 stVerticalBlock 內的位置判斷是否為選項按鈕
-            // 選項按鈕的 parent 不含 stHorizontalBlock
-            const inHoriz = wrapper.closest('[data-testid="stHorizontalBlock"]');
-            if (!inHoriz && !wrapper.hasAttribute('data-slot')) {{
-                // 排除分頁按鈕（分頁按鈕在 stHorizontalBlock 裡）
-                // 這裡已排除，剩下的就是選項按鈕
-                wrapper.setAttribute('data-slot', 'nav-btn');
-            }}
+            if (wrapper.closest('[data-testid="stHorizontalBlock"]')) return;
+            if (wrapper.closest('.pager-row')) return;
+            wrapper.setAttribute('data-slot', 'nav-btn');
         }});
     }}
 
-    setTimeout(tagSlots, 200);
-    new MutationObserver(tagSlots).observe(document.body, {{childList: true, subtree: true}});
+    // 問題3：把分頁列的三個 Streamlit 元件收進 .pager-row flex 容器
+    function buildPagerRow() {{
+        const pagerDiv = document.querySelector('.pager-row');
+        if (!pagerDiv) return;
+        // 找 pagerDiv 之後的兄弟 stHorizontalBlock
+        const horiz = pagerDiv.nextElementSibling;
+        if (!horiz) return;
+        // 已整理過就跳過
+        if (pagerDiv.dataset.built) return;
+
+        // 把 horiz 內的按鈕和頁碼文字移進 pagerDiv
+        const children = Array.from(horiz.children);
+        children.forEach(c => pagerDiv.appendChild(c));
+        horiz.style.display = 'none';
+        pagerDiv.dataset.built = '1';
+    }}
+
+    function run() {{
+        tagNavBtns();
+        // buildPagerRow();  // 備用，目前分頁用純 HTML 渲染
+    }}
+
+    setTimeout(run, 200);
+    new MutationObserver(run).observe(document.body, {{childList: true, subtree: true}});
 }})();
 </script>
 """, unsafe_allow_html=True)
@@ -187,7 +238,7 @@ st.markdown(f"""
 </div>
 """, unsafe_allow_html=True)
 
-# ── 按鈕區（PAGE_SIZE 顆，不足補透明佔位） ──
+# ── 選項按鈕區（JS 標記 data-slot="nav-btn"） ──
 for i in range(PAGE_SIZE):
     if i < len(current_items):
         loc = current_items[i]
@@ -197,16 +248,20 @@ for i in range(PAGE_SIZE):
     else:
         st.button("　", key=f"empty_{i}", disabled=True, use_container_width=True)
 
-# ── 分頁列 ──
-c1, c2, c3, c4, c5 = st.columns([2, 0.4, 1, 0.4, 2])
-with c2:
+# ── 問題3：分頁列用純 HTML + st.button 並排放在同一個 st.columns ──
+# 用 columns 讓三個元素在同一行，比例讓按鈕緊靠頁碼
+_, lc, mc, rc, _ = st.columns([3, 1, 2, 1, 3])
+with lc:
     if st.button("❮", key="prev"):
         st.session_state.page = (st.session_state.page - 1) % total_pages
         st.rerun()
-with c3:
-    st.markdown(f'<div class="page-text">{st.session_state.page + 1} / {total_pages}</div>',
-                unsafe_allow_html=True)
-with c4:
+with mc:
+    st.markdown(
+        f'<div class="page-text" style="text-align:center;">'
+        f'{st.session_state.page + 1} / {total_pages}</div>',
+        unsafe_allow_html=True
+    )
+with rc:
     if st.button("❯", key="next"):
         st.session_state.page = (st.session_state.page + 1) % total_pages
         st.rerun()
