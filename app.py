@@ -21,7 +21,7 @@ def send_to_led(name, distance, angle):
     url = "http://10.12.4.100:8080/api/control"
     payload = {"data": {"target": name, "dist": f"{distance:.2f}km", "angle": f"{angle:.1f}°"}}
     try:
-        requests.post(url, json=payload, timeout=2)
+        requests.post(url, json=payload, timeout=0)
     except:
         pass
 
