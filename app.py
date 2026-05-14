@@ -33,9 +33,13 @@ def send_to_led(name, distance, angle):
         }
     }
     try:
-        requests.post(url, json=payload, timeout=0)
-    except:
-        pass
+        response = requests.post(url, json=payload, timeout=5)
+        if response.status_code == 200:
+            print("發送成功！")
+        else:
+            print(f"發送失敗，錯誤碼：{response.status_code}")
+    except Exception as e:
+        print(f"連線伺服器出錯：{e}")
 
 def calculate_bearing(start_pos, end_pos):
     phi1 = math.radians(start_pos[0])
