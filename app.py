@@ -24,7 +24,7 @@ FOOTER_HEIGHT = 150 # 底部資訊卡的高度
 # ==========================================
 
 def send_to_led(name, distance, angle):
-    url = "http://10.12.4.100:8080/api/control"
+    url = "http://192.168.14.46:18011/api/control"
     payload = {
         "data": {
             "target": name, 
@@ -100,19 +100,6 @@ if "selected_loc" not in st.session_state: st.session_state.selected_loc = None
 
 st.markdown(f"""
 <style>
-    /* [隱藏打包工具插入的懸浮按鈕與圖示] */
-    /* 針對常見的 web2apk 注入元素進行隱藏 */
-    #floating-button, .fab, .floating-menu, #app-nav-bar, [class*="web2apk"] {{
-        display: none !important;
-        visibility: hidden !important;
-        opacity: 0 !important;
-        pointer-events: none !important; /* 確保隱藏後點擊不會被攔截 */
-    }}
-
-    /* 針對可能的圖片或圓形頭像按鈕 */
-    img[src*="data:image"], img[class*="icon"] {{
-        /* 如果有明確知道該圖示的 class，請替換進來 */
-    }}
     /* [全域禁止選取] */
     /* * 代表選取所有標籤，確保無論是 div、按鈕還是純文字都無法被長按或選取 */
     *, html, body, [data-testid="stAppViewContainer"], .white-card, .page-text, button, p, div, h1, span {{
